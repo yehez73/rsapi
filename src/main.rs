@@ -13,11 +13,14 @@ mod database;
 async fn main() -> std::io::Result<()> {
     println!("Server running at http://127.0.0.1:8080");
 
-    Builder::from_env(Env::default().default_filter_or("info")).init();
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
 
-    HttpServer::new(|| {
+    let pool = database::init_pool().await;
+
+    HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
+            .app_data(pool.clone()) 
             .configure(config_routes)
     })
     .bind("127.0.0.1:8080")?
