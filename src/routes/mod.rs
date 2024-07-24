@@ -7,4 +7,4 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
         .route("/users/{id}", web::get().to(crate::controller::user_controller::get_user))
         .route("/users/{id}", web::put().to(crate::controller::user_controller::update_user))
         .route("/users/{id}", web::delete().to(crate::controller::user_controller::delete_user));
-}
+}   
