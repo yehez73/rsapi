@@ -1,9 +1,17 @@
-use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
-use chrono::{DateTime, Utc};
-use sqlx::types::chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
+use serde::{Serialize, Deserialize};
+use sqlx::{FromRow, Type};
 
-#[derive(Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "gender")]
+pub enum Gender {
+    #[sqlx(rename = "Laki-laki")]
+    LakiLaki,
+    #[sqlx(rename = "Perempuan")]
+    Perempuan,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Users {
     pub user_uuid: String,
     pub user_application_role_uuid: String,
@@ -13,14 +21,14 @@ pub struct Users {
     pub application_title: String,
     pub division_title: String,
     pub personal_name: String,
-    pub personal_birthday: String,
-    pub personal_gender: String,
+    pub personal_birthday: NaiveDate,
+    pub personal_gender: Option<Gender>,
     pub personal_phone: String,
     pub personal_address: String,
     pub created_by: Option<String>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<NaiveDateTime>,
     pub updated_by: Option<String>,
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<NaiveDateTime>,
     pub deleted_by: Option<String>,
-    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<NaiveDateTime>,
 }

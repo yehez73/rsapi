@@ -1,6 +1,5 @@
-use actix_web::{App, HttpServer, middleware::Logger};
+use actix_web::{App, HttpServer};
 use crate::routes::config_routes;
-use env_logger::{Builder, Env};
 
 mod middleware;
 mod routes;
