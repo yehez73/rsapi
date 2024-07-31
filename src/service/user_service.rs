@@ -1,8 +1,9 @@
-use actix_web::{web::{self}, Error, HttpResponse};
-use sqlx::{PgPool};
-use bcrypt::{hash, verify, DEFAULT_COST};
+use actix_web::{Error, HttpResponse};
+use sqlx::PgPool;
+use bcrypt::{hash, DEFAULT_COST};
 use base64::{engine::general_purpose, Engine as _};
-use crate::models::user::{self, Register, Users};
+use uuid::Uuid;
+use crate::models::user::{Register, Users};
 
 pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     let query = r#"
@@ -48,21 +49,31 @@ pub async fn add_user(pool: &PgPool,user: Register) -> Result<HttpResponse, Erro
         return Err(actix_web::error::ErrorBadRequest("Password must be at least 8 characters"));
     }
 
+    let user_uuid = "5b9909a5-216e-4e20-95a3-8b9b0114b401";
+
     let hashed_password = hash(user.user_password, DEFAULT_COST).unwrap();
 
     let hashed_password_str = general_purpose::STANDARD.encode(hashed_password.as_bytes());
 
-    // let username = GetUsernameByID(pool, userUUID).await?;
+    let username = get_username_by_id(pool, user_uuid).await.unwrap();
+
+    // buat current timestamp untuk created_at dengan library naivedate library dengan output dd/mm/yy dan jam:menit:detik
+    let current_timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let user_uuid = Uuid::new_v4();
+
+    println!("New password created {} at {} with UUID {} created by {}", hashed_password_str, current_timestamp, user_uuid, username);
 
     Ok(HttpResponse::Ok().finish())
 }
 
-// pub async fn GetUsernameByID(pool: &PgPool, userUUID: String) -> Result<String, Error> {
-//     let row: (String,) = sqlx::query_as("SELECT user_name FROM user_ms WHERE user_uuid = $1")
-//         .bind(userUUID)
-//         .fetch_one(pool)
-//         .await
-//         .unwrap();
-    
-//     Ok(row.0)
-// }
+async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, sqlx::Error> {
+    let username = sqlx::query!(
+        "SELECT user_name FROM user_ms WHERE user_uuid = $1",
+        user_uuid
+    )
+    .fetch_one(db_pool)
+    .await?
+    .user_name;
+    Ok(username)
+}
