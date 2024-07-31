@@ -1,5 +1,8 @@
-use sqlx::PgPool;
-use crate::models::user::Users;
+use actix_web::{web::{self}, Error, HttpResponse};
+use sqlx::{PgPool};
+use bcrypt::{hash, verify, DEFAULT_COST};
+use base64::{engine::general_purpose, Engine as _};
+use crate::models::user::{self, Register, Users};
 
 pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     let query = r#"
@@ -38,3 +41,28 @@ pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
 
     Ok(users)
 }   
+
+pub async fn add_user(pool: &PgPool,user: Register) -> Result<HttpResponse, Error> {
+
+    if user.user_password.len() < 8 {
+        return Err(actix_web::error::ErrorBadRequest("Password must be at least 8 characters"));
+    }
+
+    let hashed_password = hash(user.user_password, DEFAULT_COST).unwrap();
+
+    let hashed_password_str = general_purpose::STANDARD.encode(hashed_password.as_bytes());
+
+    // let username = GetUsernameByID(pool, userUUID).await?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+// pub async fn GetUsernameByID(pool: &PgPool, userUUID: String) -> Result<String, Error> {
+//     let row: (String,) = sqlx::query_as("SELECT user_name FROM user_ms WHERE user_uuid = $1")
+//         .bind(userUUID)
+//         .fetch_one(pool)
+//         .await
+//         .unwrap();
+    
+//     Ok(row.0)
+// }

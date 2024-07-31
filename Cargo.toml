@@ -17,5 +17,10 @@ sqlx = { version = "0.8.0", features = [
     "runtime-async-std-native-tls",
     "postgres",
     "time",
-    "chrono"
+    "chrono",
+    "uuid",
 ] }
+uuid = { version = "1.10.0", features = ["serde", "v4"] }
+bcrypt = "0.15.1"
+phonenumber = "0.3.6"
+base64 = "0.22.1"
