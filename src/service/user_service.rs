@@ -1,4 +1,4 @@
-use crate::models::user::{Register, Users};
+use crate::models::user::{Register, Users, Gender};
 use actix_web::{Error, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use bcrypt::{hash, DEFAULT_COST};
@@ -172,24 +172,28 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     let birthday = user.personal_birthday.format("%Y-%m-%d");
     let personal_number = phonenumber::parse(Some(ID), user.personal_phone.clone()).unwrap();
 
-    query!(
-        r#"
-        INSERT INTO personal_data_ms (personal_id, personal_uuid, division_id, user_id, personal_name, personal_birthday, personal_gender, personal_phone, personal_address) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        "#,
-        personal_id = current_timestamp_micros + unique_uuid.as_bytes()[2] as i64,
-        personal_uuid = unique_uuid_str,
-        division_id = division_id,
-        user_id = user_id,
-        personal_name = user.personal_name,
-        personal_birthday = user.personal_birthday,
-        personal_gender = user.personal_gender,
-        personal_phone = personal_number.national().to_string(),
-        personal_address = user.personal_address,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    // let personal_id = current_timestamp_micros + i128::from(user.user_uuid.as_bytes()[2]);
+    let personal_gender = "user.personal_gender.as_ref().map(|gender| gender.to_string());"
+    println!("personal_gender: {:?}, type: {:?}", personal_gender, std::any::type_name::<Option<String>>());
+
+    // sqlx::query!(
+    //     r#"
+    //     INSERT INTO personal_data_ms (personal_id, personal_uuid, division_id, user_id, personal_name, personal_birthday, personal_gender, personal_phone, personal_address) 
+    //     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    //     "#,
+    //     personal_id,
+    //     unique_uuid_str,
+    //     division_id,
+    //     user_id,
+    //     user.personal_name,
+    //     birthday.to_string(),
+    //     personal_gender,
+    //     personal_number.national().to_string(),
+    //     user.personal_address,
+    // )
+    // .execute(pool)
+    // .await?;
+    
 
     Ok(HttpResponse::Ok().finish())
 }

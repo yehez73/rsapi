@@ -6,10 +6,21 @@ use sqlx::{FromRow, Type};
 #[derive(Debug, Serialize, Deserialize, Type)]
 #[sqlx(type_name = "gender")]
 pub enum Gender {
+    #[serde(rename = "Laki-laki")]
     #[sqlx(rename = "Laki-laki")]
     LakiLaki,
+    #[serde(rename = "Perempuan")]
     #[sqlx(rename = "Perempuan")]
     Perempuan,
+}
+
+impl ToString for Gender {
+    fn to_string(&self) -> String {
+        match self {
+            Gender::LakiLaki => "Laki-laki".to_string(),
+            Gender::Perempuan => "Perempuan".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -43,17 +54,17 @@ pub struct ApplicationRole {
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Register {
-    pub user_id: u32,
-    pub user_uuid: Uuid,
+    // pub user_id: u32,
+    // pub user_uuid: Uuid,
     pub user_name: String,
     pub user_password: String,
     pub user_email: String,
-    pub personal_uuid: Uuid,
-    pub personal_name: String,
+    // pub personal_uuid: Uuid,
+    // pub personal_name: String,
     pub personal_birthday: NaiveDate,
     pub personal_gender: Option<Gender>,
     pub personal_phone: String,
-    pub personal_address: String,
+    // pub personal_address: String,
     // pub created_by: Option<String>,
     // pub created_at: Option<NaiveDateTime>,
     // pub updated_by: Option<String>,
