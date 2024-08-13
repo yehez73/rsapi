@@ -2,15 +2,17 @@ use crate::models::user::{Register, Users, Gender};
 use actix_web::{Error, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use bcrypt::{hash, DEFAULT_COST};
+use chrono::NaiveDate;
 use phonenumber::{country::Id::ID, NationalNumber};
-use sqlx::{query, PgPool};
-use time::OffsetDateTime;
+use sqlx::{query, query_as, PgPool};
+use time::{OffsetDateTime, PrimitiveDateTime};
 use uuid::Uuid;
+use anyhow::Result;
 
 pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     let query = r#"
         SELECT 
-            u.user_uuid, 
+            u.user_uuid,    
             uar.user_application_role_uuid, 
             u.user_name, 
             u.user_email, 
@@ -51,44 +53,41 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     }
 
     let unique_uuid = Uuid::new_v4();
-    let current_offset_datetime = time::OffsetDateTime::now_local();
-    let current_offset_datetime = match current_offset_datetime {
-        Ok(offset_datetime) => offset_datetime,
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            OffsetDateTime::now_local().unwrap()
-        }
-    };
+    let current_offset_datetime = time::OffsetDateTime::now_local().unwrap_or_else(|err| {
+        eprintln!("Error getting current time: {}", err);
+        OffsetDateTime::now_local().unwrap()
+    });
 
     let current_timestamp_micros = current_offset_datetime.unix_timestamp_nanos() / 1000;
     let user_id = format!("{}{}", current_timestamp_micros, unique_uuid.as_bytes()[0])
         .parse::<i64>()
         .unwrap();
-    let user_uuid = "5b9909a5-216e-4e20-95a3-8b9b0114b401";
+    let user_uuid = "af237922-3670-4d22-9cf3-d6875f032d21";
     let hashed_password = hash(user.user_password, DEFAULT_COST).unwrap();
     let hashed_password_str = general_purpose::STANDARD.encode(hashed_password.as_bytes());
-    let username = get_username_by_id(pool, user_uuid).await.unwrap();
+    // let username = get_username_by_id(pool, user_uuid).await?;
+    let username = "admin";
     let unique_uuid_str = unique_uuid.to_string();
 
-    // query!(
-    //     r#"
-    //     INSERT INTO user_ms (user_id, user_uuid, user_name, user_email, user_password, created_by)
-    //     VALUES ($1, $2, $3, $4, $5, $6)
-    //     "#,
-    //     user_id,
-    //     unique_uuid_str,
-    //     user.user_name,
-    //     user.user_email,
-    //     hashed_password_str,
-    //     username,
-    // )
-    // .execute(pool)
-    // .await
-    // .unwrap();
+    query!(
+        r#"
+        INSERT INTO user_ms (user_id, user_uuid, user_name, user_email, user_password, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+        user_id,
+        unique_uuid_str,
+        user.user_name,
+        user.user_email,
+        hashed_password_str,
+        username,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 
     println!("New user created with UUID: {}", unique_uuid_str);
 
-    let role_id: i64 = query!(
+    let role_id = query!(
         r#"
         SELECT role_id FROM role_ms WHERE role_uuid = $1 AND deleted_at IS NULL
         "#,
@@ -96,10 +95,10 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     )
     .fetch_one(pool)
     .await
-    .unwrap()
+    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
     .role_id;
 
-    let application_id: i64 = query!(
+    let application_id = query!(
         r#"
         SELECT application_id FROM application_ms WHERE application_uuid = $1 AND deleted_at IS NULL
         "#,
@@ -107,10 +106,10 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     )
     .fetch_one(pool)
     .await
-    .unwrap()
+    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
     .application_id;
 
-    let division_id: i64 = query!(
+    let division_id = query!(
         r#"
         SELECT division_id FROM division_ms WHERE division_uuid = $1 AND deleted_at IS NULL
         "#,
@@ -118,25 +117,27 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     )
     .fetch_one(pool)
     .await
-    .unwrap()
+    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
     .division_id;
 
     let app_role_id = (current_timestamp_micros + unique_uuid.as_bytes()[1] as i128) as i64;
 
-    // let unique_uuid_str = unique_uuid.to_string();
-    // query!(r#"
-    //     INSERT INTO application_role_ms (application_role_uuid, application_role_id, application_id, role_id, created_by)
-    //     VALUES ($1, $2, $3, $4, $5)
-    //     "#,
-    //     unique_uuid_str,
-    //     app_role_id,
-    //     application_id,
-    //     role_id,
-    //     username,
-    // )
-    // .execute(pool)
-    // .await
-    // .unwrap();
+    let unique_uuid_str = Uuid::parse_str(&unique_uuid.to_string())
+        .map_err(|e| actix_web::error::ErrorInternalServerError("Failed to parse UUID"))?;
+
+    query!(r#"
+        INSERT INTO application_role_ms (application_role_uuid, application_role_id, application_id, role_id, created_by)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        unique_uuid_str.to_string(),
+        app_role_id,
+        application_id,
+        role_id,
+        username,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 
     println!(
         "New application role created with UUID: {}",
@@ -169,42 +170,53 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
         }
     }
 
-    let birthday = user.personal_birthday.format("%Y-%m-%d");
+    let birthday_str = user.personal_birthday.format("%Y-%m-%d").to_string();
+    let birthday_date = NaiveDate::parse_from_str(&birthday_str, "%Y-%m-%d")
+        .map_err(|e| {
+            eprintln!("Date parsing error: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Failed to parse date")
+        })?;
+
     let personal_number = phonenumber::parse(Some(ID), user.personal_phone.clone()).unwrap();
+    let personal_id = current_timestamp_micros + i128::from(unique_uuid.as_bytes()[2]);
 
-    // let personal_id = current_timestamp_micros + i128::from(user.user_uuid.as_bytes()[2]);
-    let personal_gender = "user.personal_gender.as_ref().map(|gender| gender.to_string());"
-    println!("personal_gender: {:?}, type: {:?}", personal_gender, std::any::type_name::<Option<String>>());
-
-    // sqlx::query!(
-    //     r#"
-    //     INSERT INTO personal_data_ms (personal_id, personal_uuid, division_id, user_id, personal_name, personal_birthday, personal_gender, personal_phone, personal_address) 
-    //     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    //     "#,
-    //     personal_id,
-    //     unique_uuid_str,
-    //     division_id,
-    //     user_id,
-    //     user.personal_name,
-    //     birthday.to_string(),
-    //     personal_gender,
-    //     personal_number.national().to_string(),
-    //     user.personal_address,
-    // )
-    // .execute(pool)
-    // .await?;
-    
+    sqlx::query!(
+        r#"
+        INSERT INTO personal_data_ms (personal_id, personal_uuid, division_id, user_id, personal_name, personal_birthday, personal_gender, personal_phone, personal_address) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        "#,
+        personal_id as i64,
+        unique_uuid_str as Uuid,
+        division_id as i64,
+        user_id as i64, 
+        user.personal_name as String,
+        birthday_date as NaiveDate,
+        user.personal_gender.unwrap() as Gender,
+        personal_number.national().to_string() as String,
+        user.personal_address as String,
+    )
+    .execute(pool)
+    .await
+    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?;
 
     Ok(HttpResponse::Ok().finish())
 }
 
-async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, sqlx::Error> {
-    let username = sqlx::query!(
-        "SELECT user_name FROM user_ms WHERE user_uuid = $1",
-        user_uuid
-    )
-    .fetch_one(db_pool)
-    .await?
-    .user_name;
-    Ok(username)
-}
+// async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
+//     match sqlx::query!(
+//         "SELECT user_name FROM user_ms WHERE user_uuid = $1",
+//         user_uuid
+//     )
+//     .fetch_one(db_pool)
+//     .await {
+//         Ok(record) => Ok(record.user_name),
+//         Err(sqlx::Error::RowNotFound) => {
+//             eprintln!("No user found with UUID: {}", user_uuid);
+//             Err(actix_web::error::ErrorNotFound("User not found"))
+//         }
+//         Err(e) => {
+//             eprintln!("Database query error: {:?}", e);
+//             Err(actix_web::error::ErrorInternalServerError("Internal server error"))
+//         }
+//     }
+// }
