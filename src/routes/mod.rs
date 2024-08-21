@@ -8,6 +8,18 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
         .route("/division/update/{id}", web::put().to(crate::controller::division_controller::update_division))
         .route("/division/delete/{id}", web::delete().to(crate::controller::division_controller::delete_division))
 
+        // Role
+        .route("/role/all", web::get().to(crate::controller::role_controller::getall_role))
+        .route("/role/add", web::post().to(crate::controller::role_controller::add_role))
+        .route("/role/update/{id}", web::put().to(crate::controller::role_controller::update_role))
+        .route("/role/delete/{id}", web::delete().to(crate::controller::role_controller::delete_role))
+
+        // Application
+        .route("/application/all", web::get().to(crate::controller::application_controller::getall_application))
+        .route("/application/add", web::post().to(crate::controller::application_controller::add_application))
+        .route("/application/update/{id}", web::put().to(crate::controller::application_controller::update_application))
+        .route("/application/delete/{id}", web::delete().to(crate::controller::application_controller::delete_application))
+
         .route("/user/all", web::get().to(crate::controller::user_controller::getall_users))
         .route("/user/add", web::post().to(crate::controller::user_controller::add_user));
         // .route("/users/{id}", web::get().to(crate::controller::user_controller::get_user))
