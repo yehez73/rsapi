@@ -1,10 +1,10 @@
-use crate::models::application::{self, Application};
+use crate::models::application::Application;
 use actix_web::{Error, HttpResponse};
-use sqlx::{query, query_as, PgPool};
+use sqlx::{query, PgPool};
 use anyhow::Result;
 use time::{OffsetDateTime, PrimitiveDateTime};
 use uuid::Uuid;
-use log::{error};
+use log::error;
 
 pub async fn getall_application(pool: &PgPool) -> Result<Vec<Application>, sqlx::Error> {
     let query = r#"
@@ -12,7 +12,8 @@ pub async fn getall_application(pool: &PgPool) -> Result<Vec<Application>, sqlx:
             application_uuid, 
             application_order,
             application_code, 
-            application_title, 
+            application_title,
+            application_description, 
             application_show, 
             created_by, 
             created_at, 
@@ -33,7 +34,7 @@ pub async fn add_application(pool: &PgPool, application: Application) -> Result<
     let username = "admin";
 
     // Check if application with the same title or code already exists
-    if let Some(row) = query!(
+    if let Some(_row) = query!(
         "SELECT application_id FROM application_ms WHERE (application_title = $1 OR application_code = $2) AND deleted_at IS NULL",
         application.application_title,
         application.application_code

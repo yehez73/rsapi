@@ -199,6 +199,21 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     .await
     .map_err(|err| actix_web::error::ErrorInternalServerError(err))?;
 
+    query!(
+        r#"
+        INSERT INTO user_application_role_ms (user_application_role_uuid, user_id, application_role_id, division_id, created_by)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        unique_uuid_str.to_string(),
+        user_id,
+        app_role_id,
+        division_id,
+        username,
+    )
+    .execute(pool)
+    .await
+    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?;
+
     Ok(HttpResponse::Ok().finish())
 }
 

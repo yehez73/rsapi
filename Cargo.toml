@@ -27,3 +27,6 @@ base64 = "0.22.1"
 time = { version = "0.3.36", features = ["local-offset"] }
 anyhow = "1.0.86"
 log = "0.4.22"
+jsonwebtoken = "9.3.0"
+validator = "0.18.1"
+ring = "0.17.8"

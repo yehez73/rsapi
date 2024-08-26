@@ -20,9 +20,16 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
         .route("/application/update/{id}", web::put().to(crate::controller::application_controller::update_application))
         .route("/application/delete/{id}", web::delete().to(crate::controller::application_controller::delete_application))
 
+        // Application Role
+        .route("/user/application/role", web::get().to(crate::controller::user_application_role_controller::getall_userapplicationrole))
+
+        // User
         .route("/user/all", web::get().to(crate::controller::user_controller::getall_users))
-        .route("/user/add", web::post().to(crate::controller::user_controller::add_user));
+        .route("/user/add", web::post().to(crate::controller::user_controller::add_user))
         // .route("/users/{id}", web::get().to(crate::controller::user_controller::get_user))
         // .route("/users/{id}", web::put().to(crate::controller::user_controller::update_user))
         // .route("/users/{id}", web::delete().to(crate::controller::user_controller::delete_user));
-}   
+
+        // Login
+        .route("/login", web::post().to(crate::controller::login_controller::login));
+}  

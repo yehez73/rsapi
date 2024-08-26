@@ -1,5 +1,6 @@
 use actix_web::{App, HttpServer};
 use crate::routes::config_routes;
+use crate::middleware::cors_middleware;
 
 mod middleware;
 mod routes;
@@ -19,7 +20,8 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .app_data(pool.clone()) 
+            .wrap(cors_middleware())
+            .app_data(pool.clone())
             .configure(config_routes)
     })
     .bind("127.0.0.1:8080")?
