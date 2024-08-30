@@ -4,3 +4,4 @@ pub mod division;
 pub mod role;
 pub mod user;
 pub mod auth;
+pub mod profile;

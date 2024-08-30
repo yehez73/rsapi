@@ -4,3 +4,4 @@ pub mod division_service;
 pub mod role_service;
 pub mod user_service;
 pub mod auth_service;
+pub mod profile_service;

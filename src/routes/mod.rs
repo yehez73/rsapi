@@ -1,4 +1,4 @@
-use actix_web::web::{self};
+use actix_web::{web::{self, route}, HttpRequest};
 
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
     cfg
@@ -29,7 +29,10 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
         // .route("/users/{id}", web::get().to(crate::controller::user_controller::get_user))
         // .route("/users/{id}", web::put().to(crate::controller::user_controller::update_user))
         // .route("/users/{id}", web::delete().to(crate::controller::user_controller::delete_user));
-
+        
         // Login
-        .route("/login", web::post().to(crate::controller::login_controller::login));
-}  
+        .route("/login", web::post().to(crate::controller::login_controller::login))
+
+        // Profile
+        .route("/auth/my/profile", web::get().to(crate::controller::profile_controller::my_profile));
+}

@@ -15,5 +15,7 @@ pub struct UserDetails {
     pub role_code: String,
     pub division_title: String,
     pub division_code: String,
-    pub username: String,
+    pub user_name: String,
+    pub user_id: i64,
+    pub is_authenticated: bool,
 }

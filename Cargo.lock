@@ -299,6 +299,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "phonenumber",
+ "rand",
  "ring",
  "serde",
  "serde_json",
