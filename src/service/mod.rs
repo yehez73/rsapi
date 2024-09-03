@@ -5,3 +5,4 @@ pub mod role_service;
 pub mod user_service;
 pub mod auth_service;
 pub mod profile_service;
+pub mod application_role_service;

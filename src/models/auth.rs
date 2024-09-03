@@ -19,3 +19,9 @@ pub struct UserDetails {
     pub user_id: i64,
     pub is_authenticated: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChangePassword {
+    pub old_password: String,
+    pub new_password: String,
+}

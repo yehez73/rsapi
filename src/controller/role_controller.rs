@@ -1,5 +1,7 @@
-use actix_web::{web, Responder, HttpResponse};
-use crate::{models::role::Role, service::role_service};
+use std::error::Error;
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use serde_json::json;
+use crate::{models::role::Role, service::role_service, utils::token::validate_token};
 
 pub async fn getall_role(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     match role_service::getall_role(pool.get_ref()).await {
@@ -8,10 +10,24 @@ pub async fn getall_role(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     }
 }
 
-pub async fn add_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>) -> impl Responder {
-    match role_service::add_role(pool.get_ref(), role.into_inner()).await {
-        Ok(response) => response,
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+pub async fn add_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
+
+    let user_uuid = claims.user_uuid;
+    
+    match role_service::add_role(pool.get_ref(), role.into_inner(), &user_uuid).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Berhasil Menambahkan Role!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Gagal Menambahkan Role: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
     }
 }
 

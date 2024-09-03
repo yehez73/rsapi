@@ -1,6 +1,8 @@
-use crate::models::auth::{Login, UserDetails};
-use sqlx::{query, PgPool};
-use bcrypt::verify;
+use crate::models::auth::{ChangePassword, Login, UserDetails};
+use actix_web::HttpResponse;
+use sqlx::{decode, query, PgPool};
+use bcrypt::{bcrypt, hash, verify, DEFAULT_COST};
+use uuid::Uuid;
 use core::str;
 use std::{error::Error};
 use base64::{self, engine::general_purpose, Engine};
@@ -94,4 +96,45 @@ pub async fn login(pool: &PgPool, user_login: &Login) -> Result<UserDetails, Box
     }
 
     Err("Authentication failed".into())
+}
+
+
+pub async fn change_password(pool: &PgPool, password: ChangePassword, user_uuid: &str) -> Result<(), Box<dyn Error>> {
+    let db_password = query!(
+        "SELECT user_password 
+         FROM user_ms 
+         WHERE user_uuid = $1",
+        user_uuid.to_string()
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if password.new_password.len() < 8 {
+        return Err("Password should be at least 8 characters long".into());
+    }
+
+    let decoded_password = general_purpose::STANDARD.decode(db_password.user_password)?;
+
+    if verify(&password.old_password, str::from_utf8(&decoded_password)?)? == false {
+        return Err("Old password is incorrect".into());
+    }
+
+    if verify(&password.new_password, str::from_utf8(&decoded_password)?)? == true {
+        return Err("New password must be different from the old password".into());
+    }
+
+    let new_hashed_password = hash(password.new_password, DEFAULT_COST).unwrap();
+    let new_hashed_password_str = general_purpose::STANDARD.encode(new_hashed_password.as_bytes());
+
+    query!(
+        "UPDATE user_ms 
+         SET user_password = $1 
+         WHERE user_uuid = $2",
+        new_hashed_password_str,
+        user_uuid
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

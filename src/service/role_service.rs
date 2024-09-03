@@ -29,10 +29,9 @@ pub async fn getall_role(pool: &PgPool) -> Result<Vec<Role>, sqlx::Error> {
     Ok(divisions)
 }
 
-pub async fn add_role(pool: &PgPool, role: Role) -> Result<HttpResponse, Error> {
-    let username = "admin";
+pub async fn add_role(pool: &PgPool, role: Role, user_uuid: &str) -> Result<HttpResponse, Error> {
+    let username = get_username_by_id(pool, user_uuid).await?;
 
-    // Check if role with the same title or code already exists
     if let Some(row) = query!(
         "SELECT role_id FROM role_ms WHERE (role_title = $1 OR role_code = $2) AND deleted_at IS NULL",
         role.role_title,
@@ -42,27 +41,22 @@ pub async fn add_role(pool: &PgPool, role: Role) -> Result<HttpResponse, Error> 
     .await
     .unwrap()
     {
-        // Duplicate found, return error
         error!("Role with the same title or code already exists");
         return Ok(HttpResponse::BadRequest().finish());
     }
 
-    // Get the current timestamp
     let current_offset_datetime = time::OffsetDateTime::now_local().unwrap_or_else(|err| {
         eprintln!("Error getting current time: {}", err);
         OffsetDateTime::now_local().unwrap()
     });
     let current_timestamp_micros = current_offset_datetime.unix_timestamp_nanos() / 1000;
 
-    // Generate a unique UUID
     let unique_uuid_str = Uuid::new_v4().to_string();
 
-    // Generate a role_id by combining the timestamp with a byte from the UUID
     let role_id = format!("{}{}", current_timestamp_micros, unique_uuid_str.as_bytes()[0])
         .parse::<i64>()
         .unwrap();
 
-    // Insert the new role into the database
     query!(
         r#"
         INSERT INTO role_ms (
@@ -85,6 +79,25 @@ pub async fn add_role(pool: &PgPool, role: Role) -> Result<HttpResponse, Error> 
     .unwrap();
 
     Ok(HttpResponse::Ok().finish())
+}
+
+async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
+    match sqlx::query!(
+        "SELECT user_name FROM user_ms WHERE user_uuid = $1",
+        user_uuid
+    )
+    .fetch_one(db_pool)
+    .await {
+        Ok(record) => Ok(record.user_name),
+        Err(sqlx::Error::RowNotFound) => {
+            eprintln!("No user found with UUID: {}", user_uuid);
+            Err(actix_web::error::ErrorNotFound("User not found"))
+        }
+        Err(e) => {
+            eprintln!("Database query error: {:?}", e);
+            Err(actix_web::error::ErrorInternalServerError("Internal server error"))
+        }
+    }
 }
 
 pub async fn update_role(pool: &PgPool, role: Role, id: Uuid) -> Result<HttpResponse, Error> {

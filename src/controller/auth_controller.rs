@@ -1,27 +1,14 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use actix_web::{web, Responder, HttpResponse};
-use rand::RngCore as _;
+use std::error::Error;
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgPool;
-use crate::models::auth::Login;
-use crate::service::auth_service::login as authenticate;
-use jsonwebtoken::{encode, Header, EncodingKey};
-use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
-use ring::error::Unspecified;
-use rand::rngs::OsRng;
-
-#[derive(Serialize, Deserialize)]
-pub struct Claims {
-    pub user_id: i64,
-    pub user_uuid: String,
-    pub user_name: String,
-    pub role_code: String,
-    pub division_title: String,
-    pub division_code: String,
-    #[serde(flatten)]
-    pub standard_claims: HashMap<String, serde_json::Value>,
-}
+use crate::models::auth::{ChangePassword, Login};
+use crate::service::auth_service::{self, login as authenticate};
+use crate::utils::token::{validate_token, Claims};
+use jsonwebtoken::{decode as jwt_decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use crate::utils::crypto::{generate_key, get_key, decrypt_token, encrypt_token};
 
 #[derive(Serialize)]
 struct Response {
@@ -63,7 +50,7 @@ pub async fn login(auth: web::Json<Login>, pool: web::Data<PgPool>) -> impl Resp
                 }
             };
 
-            let encrypted_token = match encrypt_token(&token) {
+            let encrypted_token = match encrypt_token(&token, (&generate_key)()) {
                 Ok(t) => t,
                 Err(_) => {
                     return HttpResponse::InternalServerError().json(Response {
@@ -93,21 +80,24 @@ pub async fn login(auth: web::Json<Login>, pool: web::Data<PgPool>) -> impl Resp
     }
 }
 
-fn generate_key() -> [u8; 32] {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    key
-}
+pub async fn change_password(pool: web::Data<sqlx::PgPool>, password: web::Json<ChangePassword>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
 
-fn encrypt_token(token: &str) -> Result<String, Unspecified> {
-    let key = generate_key(); // Generate a random key
-    let nonce = Nonce::assume_unique_for_key(rand::random::<[u8; 12]>());
+    let user_uuid = claims.user_uuid;
+    println!("User UUID: {}", user_uuid);
 
-    let unbound_key = UnboundKey::new(&AES_256_GCM, &key)?;
-    let less_safe_key = LessSafeKey::new(unbound_key);
-
-    let mut token_bytes = token.as_bytes().to_vec();
-    less_safe_key.seal_in_place_append_tag(nonce, Aad::empty(), &mut token_bytes)?;
-
-    Ok(base64::encode(&token_bytes))
+    match auth_service::change_password(&pool, password.into_inner(), &user_uuid, ).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Password Changed Successfully, Please Re-Login!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Error fetching profile: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
+    }
 }

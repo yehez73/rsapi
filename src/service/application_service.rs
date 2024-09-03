@@ -25,9 +25,9 @@ pub async fn getall_application(pool: &PgPool) -> Result<Vec<Application>, sqlx:
         WHERE deleted_at IS NULL
     "#;
 
-    let divisions = sqlx::query_as::<_, Application>(query).fetch_all(pool).await?;
+    let application = sqlx::query_as::<_, Application>(query).fetch_all(pool).await?;
 
-    Ok(divisions)
+    Ok(application)
 }
 
 pub async fn add_application(pool: &PgPool, application: Application) -> Result<HttpResponse, Error> {

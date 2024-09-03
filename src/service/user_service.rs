@@ -45,7 +45,7 @@ pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     Ok(users)
 }
 
-pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Error> {
+pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<HttpResponse, Error> {
     if user.user_password.len() < 8 {
         return Err(actix_web::error::ErrorBadRequest(
             "Password must be at least 8 characters",
@@ -62,11 +62,9 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     let user_id = format!("{}{}", current_timestamp_micros, unique_uuid.as_bytes()[0])
         .parse::<i64>()
         .unwrap();
-    let user_uuid = "af237922-3670-4d22-9cf3-d6875f032d21";
     let hashed_password = hash(user.user_password, DEFAULT_COST).unwrap();
     let hashed_password_str = general_purpose::STANDARD.encode(hashed_password.as_bytes());
-    // let username = get_username_by_id(pool, user_uuid).await?;
-    let username = "admin";
+    let username = get_username_by_id(pool, user_uuid).await?;
     let unique_uuid_str = unique_uuid.to_string();
 
     query!(
@@ -217,21 +215,61 @@ pub async fn add_user(pool: &PgPool, user: Register) -> Result<HttpResponse, Err
     Ok(HttpResponse::Ok().finish())
 }
 
-// async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
-//     match sqlx::query!(
-//         "SELECT user_name FROM user_ms WHERE user_uuid = $1",
-//         user_uuid
-//     )
-//     .fetch_one(db_pool)
-//     .await {
-//         Ok(record) => Ok(record.user_name),
-//         Err(sqlx::Error::RowNotFound) => {
-//             eprintln!("No user found with UUID: {}", user_uuid);
-//             Err(actix_web::error::ErrorNotFound("User not found"))
-//         }
-//         Err(e) => {
-//             eprintln!("Database query error: {:?}", e);
-//             Err(actix_web::error::ErrorInternalServerError("Internal server error"))
-//         }
-//     }
-// }
+async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
+    match sqlx::query!(
+        "SELECT user_name FROM user_ms WHERE user_uuid = $1",
+        user_uuid
+    )
+    .fetch_one(db_pool)
+    .await {
+        Ok(record) => Ok(record.user_name),
+        Err(sqlx::Error::RowNotFound) => {
+            eprintln!("No user found with UUID: {}", user_uuid);
+            Err(actix_web::error::ErrorNotFound("User not found"))
+        }
+        Err(e) => {
+            eprintln!("Database query error: {:?}", e);
+            Err(actix_web::error::ErrorInternalServerError("Internal server error"))
+        }
+    }
+}
+
+pub async fn get_specific_user(pool: &PgPool, id: Uuid) -> Result<Users, sqlx::Error> {
+    let query = r#"
+        SELECT 
+            u.user_uuid,    
+            uar.user_application_role_uuid, 
+            u.user_name, 
+            u.user_email, 
+            r.role_title, 
+            a.application_title, 
+            d.division_title, 
+            pdm.personal_name, 
+            pdm.personal_address, 
+            pdm.personal_birthday,
+            pdm.personal_gender,
+            pdm.personal_phone,
+            uar.created_by,
+            uar.created_at,
+            uar.updated_by,
+            uar.updated_at,
+            uar.deleted_by,
+            uar.deleted_at
+        FROM user_ms u
+        INNER JOIN user_application_role_ms uar ON u.user_id = uar.user_id
+        INNER JOIN application_role_ms ar ON uar.application_role_id = ar.application_role_id
+        INNER JOIN application_ms a ON ar.application_id = a.application_id
+        INNER JOIN role_ms r ON ar.role_id = r.role_id
+        INNER JOIN division_ms d ON uar.division_id = d.division_id
+        INNER JOIN personal_data_ms pdm ON u.user_id = pdm.user_id
+        WHERE uar.user_application_role_uuid = $1 AND uar.deleted_at IS NULL
+    "#;
+
+    let user = sqlx::query_as::<_, Users>(query)
+        .bind(id.to_string())
+        .fetch_one(pool)
+        .await?;
+
+    Ok(user)
+}
+

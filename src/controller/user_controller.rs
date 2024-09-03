@@ -1,5 +1,9 @@
-use actix_web::{web, Responder, HttpResponse};
-use crate::service::user_service;
+use std::error::Error;
+
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use serde_json::json;
+use uuid::Uuid;
+use crate::{service::user_service, utils::token::validate_token};
 
 pub async fn getall_users(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     match user_service::getall_users(pool.get_ref()).await {
@@ -8,9 +12,30 @@ pub async fn getall_users(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     }
 }
 
-pub async fn add_user(pool: web::Data<sqlx::PgPool>, user: web::Json<crate::models::user::Register>) -> impl Responder {
-    match user_service::add_user(pool.get_ref(), user.into_inner()).await {
-        Ok(response) => response,
+pub async fn add_user(pool: web::Data<sqlx::PgPool>, user: web::Json<crate::models::user::Register>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
+
+    let user_uuid = claims.user_uuid;
+
+    match user_service::add_user(&pool.get_ref(), user.into_inner(), &user_uuid).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Berhasil Menambahkan User!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Gagal Menambahkan User: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
+    }
+}
+
+pub async fn get_specific_user(pool: web::Data<sqlx::PgPool>, id: web::Path<Uuid>) -> impl Responder {
+    match user_service::get_specific_user(pool.get_ref(), id.into_inner()).await {
+        Ok(user) => HttpResponse::Ok().json(user),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
