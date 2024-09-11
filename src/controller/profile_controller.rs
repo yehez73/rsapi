@@ -1,13 +1,8 @@
-use actix_web::{web, HttpResponse, HttpRequest, Responder};
-use base64::decode;
-use jsonwebtoken::{decode as jwt_decode, Algorithm, DecodingKey, Validation};
-use rand::{rngs::OsRng, RngCore as _};
-use ring::{aead::{self, Aad, LessSafeKey, Nonce, Tag, UnboundKey, AES_256_GCM}, error::Unspecified};
+use actix_web::{web, HttpResponse, HttpRequest};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::PgPool;
 use std::error::Error;
-use crate::{models::profile::Profile, service::profile_service, utils::{crypto::{decrypt_token, get_key}, token::validate_token}};
+use crate::{service::profile_service, utils::token::validate_token};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {

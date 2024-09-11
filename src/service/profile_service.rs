@@ -1,8 +1,6 @@
 use crate::models::profile::Profile;
-use sqlx::{query, PgPool};
-use bcrypt::{verify};
+use sqlx::PgPool;
 use std::{error::Error, str};
-use base64::{self, engine::general_purpose, Engine};
 
 pub async fn my_profile(uuid: &str, pool: &PgPool) -> Result<Profile, Box<dyn Error>> {
     let profile = sqlx::query_as!(

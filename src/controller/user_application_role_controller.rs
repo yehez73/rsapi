@@ -1,5 +1,8 @@
-use actix_web::{web, Responder, HttpResponse};
-use crate::{models::user_application_role, service::user_application_role_service};
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use serde_json::json;
+use uuid::Uuid;
+use crate::{service::user_application_role_service, utils::token::validate_token};
+use std::error::Error;
 
 pub async fn getall_userapplicationrole(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     match user_application_role_service::getall_userapplicationrole(pool.get_ref()).await {
@@ -8,16 +11,23 @@ pub async fn getall_userapplicationrole(pool: web::Data<sqlx::PgPool>) -> impl R
     }
 }
 
-// pub async fn update_division(pool: web::Data<sqlx::PgPool>, division: web::Json<crate::models::division::Division>, id: web::Path<uuid::Uuid>) -> impl Responder {
-//     match division_service::update_division(pool.get_ref(), division.into_inner(), id.into_inner()).await {
-//         Ok(response) => response,
-//         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-//     }
-// }
+pub async fn delete_user_application_role(pool: web::Data<sqlx::PgPool>, id: web::Path<Uuid>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
 
-// pub async fn delete_division(pool: web::Data<sqlx::PgPool>, id: web::Path<uuid::Uuid>) -> impl Responder {
-//     match division_service::delete_division(pool.get_ref(), id.into_inner()).await {
-//         Ok(response) => response,
-//         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-//     }
-// }
+    let user_uuid = claims.user_uuid;
+
+    match user_application_role_service::delete_user_application_role(pool.get_ref(), id, &user_uuid).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Berhasil Menghapus User!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Gagal Menghapus User: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
+    }
+}

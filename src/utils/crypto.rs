@@ -1,5 +1,5 @@
 use anyhow::{Result, Context as _};
-use base64::{engine::{self, general_purpose}, Engine as _};
+use base64::{engine::general_purpose, Engine as _};
 use rand::{rngs::OsRng, RngCore as _};
 use dotenv::dotenv;
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};

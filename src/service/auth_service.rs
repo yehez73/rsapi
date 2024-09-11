@@ -1,8 +1,6 @@
 use crate::models::auth::{ChangePassword, Login, UserDetails};
-use actix_web::HttpResponse;
-use sqlx::{decode, query, PgPool};
-use bcrypt::{bcrypt, hash, verify, DEFAULT_COST};
-use uuid::Uuid;
+use sqlx::{query, PgPool};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use core::str;
 use std::{error::Error};
 use base64::{self, engine::general_purpose, Engine};

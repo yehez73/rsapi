@@ -1,10 +1,9 @@
-use crate::models::user_application_role::{self, UserApplicationRole};
-use actix_web::{Error, HttpResponse};
-use sqlx::{query, query_as, PgPool};
-use anyhow::Result;
-use time::{OffsetDateTime, PrimitiveDateTime};
+use crate::{service::user_service::get_username_by_id, models::user_application_role::UserApplicationRole};
+use actix_web::{web, HttpResponse};
+use sqlx::{query, PgPool};
+use anyhow::{Context, Result};
+use time::PrimitiveDateTime;
 use uuid::Uuid;
-use log::{error};
 
 pub async fn getall_userapplicationrole(pool: &PgPool) -> Result<Vec<UserApplicationRole>, sqlx::Error> {
     let query = r#"
@@ -38,4 +37,56 @@ pub async fn getall_userapplicationrole(pool: &PgPool) -> Result<Vec<UserApplica
     let user_application_role = sqlx::query_as::<_, UserApplicationRole>(query).fetch_all(pool).await?;
 
     Ok(user_application_role)
+}
+
+pub async fn delete_user_application_role(pool: &PgPool, id: web::Path<Uuid>, user_uuid: &str ) -> Result<HttpResponse>{
+    let username = get_username_by_id(pool, &user_uuid).await.map_err(|e| anyhow::Error::msg(e.to_string()))?;
+
+    let new_pdt = {
+        let now = time::OffsetDateTime::now_utc();
+        PrimitiveDateTime::new(now.date(), now.time())
+    };
+
+    query!(
+        r#"
+        UPDATE user_application_role_ms
+        SET deleted_by = $1, deleted_at = $2
+        WHERE user_application_role_uuid = $3 AND deleted_at IS NULL
+        "#,
+        username,
+        new_pdt,
+        id.to_string()
+    )
+    .execute(pool)
+    .await
+    .context("Failed to delete user application role")?;
+
+    let user_id = query!(
+        r#"
+        SELECT user_id
+        FROM user_application_role_ms
+        WHERE user_application_role_uuid = $1
+        "#,
+        id.to_string()
+    )
+    .fetch_one(pool)
+    .await
+    .context("Failed to get user id")?
+    .user_id;
+
+    query!(
+        r#"
+        UPDATE user_ms
+        SET deleted_by = $1, deleted_at = $2
+        WHERE user_id = $3 AND deleted_at IS NULL
+        "#,
+        username,
+        new_pdt,
+        user_id
+    )
+    .execute(pool)
+    .await
+    .context("Failed to delete user")?;
+
+    Ok(HttpResponse::Ok().finish())
 }

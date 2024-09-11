@@ -10,6 +10,13 @@ pub async fn getall_role(pool: web::Data<sqlx::PgPool>) -> impl Responder {
     }
 }
 
+pub async fn get_specific_role(pool: web::Data<sqlx::PgPool>, id: web::Path<uuid::Uuid>) -> impl Responder {
+    match role_service::get_specific_role(pool.get_ref(), id.into_inner()).await {
+        Ok(role) => HttpResponse::Ok().json(role),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
 pub async fn add_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
     let claims = match validate_token(&req).await {
         Ok(claims) => claims,
@@ -31,16 +38,44 @@ pub async fn add_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>, req:
     }
 }
 
-pub async fn update_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>, id: web::Path<uuid::Uuid>) -> impl Responder {
-    match role_service::update_role(pool.get_ref(), role.into_inner(), id.into_inner()).await {
-        Ok(response) => response,
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+pub async fn update_role(pool: web::Data<sqlx::PgPool>, role: web::Json<Role>, id: web::Path<uuid::Uuid>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
+
+    let user_uuid = claims.user_uuid;
+
+    match role_service::update_role(pool.get_ref(), role.into_inner(), id.into_inner(), &user_uuid).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Berhasil Mengedit Role!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Gagal Mengedit Role: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
     }
 }
 
-pub async fn delete_role(pool: web::Data<sqlx::PgPool>, id: web::Path<uuid::Uuid>) -> impl Responder {
-    match role_service::delete_role(pool.get_ref(), id.into_inner()).await {
-        Ok(response) => response,
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+pub async fn delete_role(pool: web::Data<sqlx::PgPool>, id: web::Path<uuid::Uuid>, req: HttpRequest) -> Result<HttpResponse, Box<dyn Error>> {
+    let claims = match validate_token(&req).await {
+        Ok(claims) => claims,
+        Err(response) => return Ok(response),
+    };
+
+    let user_uuid = claims.user_uuid;
+
+    match role_service::delete_role(pool.get_ref(), id.into_inner(), &user_uuid).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "code": 200,
+            "message": "Berhasil Menghapus Role!",
+            "status": true
+        }))),
+        Err(e) => {
+            eprintln!("Gagal Menghapus Role: {}", e);
+            Ok(HttpResponse::InternalServerError().finish())
+        }
     }
 }

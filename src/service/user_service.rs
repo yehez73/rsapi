@@ -1,13 +1,12 @@
 use crate::models::user::{Register, Users, Gender};
-use actix_web::{Error, HttpResponse};
+use actix_web::HttpResponse;
 use base64::{engine::general_purpose, Engine as _};
 use bcrypt::{hash, DEFAULT_COST};
 use chrono::NaiveDate;
-use phonenumber::{country::Id::ID, NationalNumber};
-use sqlx::{query, query_as, PgPool};
-use time::{OffsetDateTime, PrimitiveDateTime};
+use phonenumber::country::Id::ID;
+use sqlx::{query, PgPool};
 use uuid::Uuid;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 
 pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     let query = r#"
@@ -45,26 +44,26 @@ pub async fn getall_users(pool: &PgPool) -> Result<Vec<Users>, sqlx::Error> {
     Ok(users)
 }
 
-pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<HttpResponse, Error> {
+pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<HttpResponse> {
     if user.user_password.len() < 8 {
-        return Err(actix_web::error::ErrorBadRequest(
-            "Password must be at least 8 characters",
-        ));
+        bail!("Password must be at least 8 characters long");
     }
 
     let unique_uuid = Uuid::new_v4();
-    let current_offset_datetime = time::OffsetDateTime::now_local().unwrap_or_else(|err| {
-        eprintln!("Error getting current time: {}", err);
-        OffsetDateTime::now_local().unwrap()
-    });
+    let current_offset_datetime = time::OffsetDateTime::now_local()
+        .context("Error getting current time")?;
 
     let current_timestamp_micros = current_offset_datetime.unix_timestamp_nanos() / 1000;
-    let user_id = format!("{}{}", current_timestamp_micros, unique_uuid.as_bytes()[0])
-        .parse::<i64>()
-        .unwrap();
-    let hashed_password = hash(user.user_password, DEFAULT_COST).unwrap();
+    let user_id_string = format!("{}{}", current_timestamp_micros, unique_uuid.as_bytes()[0]);
+    let user_id_string = format!("{:0>18}", &user_id_string[..18]);
+
+    let user_id = user_id_string.parse::<i64>()
+        .context("Failed to parse user ID")?;
+
+    let hashed_password = hash(user.user_password, DEFAULT_COST)
+        .context("Failed to hash the password")?;
     let hashed_password_str = general_purpose::STANDARD.encode(hashed_password.as_bytes());
-    let username = get_username_by_id(pool, user_uuid).await?;
+    let username = get_username_by_id(pool, &user_uuid).await.map_err(|e| anyhow::Error::msg(e.to_string()))?;
     let unique_uuid_str = unique_uuid.to_string();
 
     query!(
@@ -81,47 +80,45 @@ pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<
     )
     .execute(pool)
     .await
-    .unwrap();
-
-    println!("New user created with UUID: {}", unique_uuid_str);
+    .context("Failed to insert new user into database")?;
 
     let role_id = query!(
         r#"
         SELECT role_id FROM role_ms WHERE role_uuid = $1 AND deleted_at IS NULL
         "#,
-        user.application_role.role_uuid.to_string()
+        user.applicationRole.role_uuid.to_string()
     )
     .fetch_one(pool)
     .await
-    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
+    .context("Failed to fetch role ID from the database")?
     .role_id;
 
     let application_id = query!(
         r#"
         SELECT application_id FROM application_ms WHERE application_uuid = $1 AND deleted_at IS NULL
         "#,
-        user.application_role.application_uuid.to_string()
+        user.applicationRole.application_uuid.to_string()
     )
     .fetch_one(pool)
     .await
-    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
+    .context("Failed to fetch application ID from the database")?
     .application_id;
 
     let division_id = query!(
         r#"
         SELECT division_id FROM division_ms WHERE division_uuid = $1 AND deleted_at IS NULL
         "#,
-        user.application_role.division_uuid.to_string()
+        user.applicationRole.division_uuid.to_string()
     )
     .fetch_one(pool)
     .await
-    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?
+    .context("Failed to fetch division ID from the database")?
     .division_id;
 
     let app_role_id = (current_timestamp_micros + unique_uuid.as_bytes()[1] as i128) as i64;
 
     let unique_uuid_str = Uuid::parse_str(&unique_uuid.to_string())
-        .map_err(|e| actix_web::error::ErrorInternalServerError("Failed to parse UUID"))?;
+        .context("Failed to parse UUID")?;
 
     query!(r#"
         INSERT INTO application_role_ms (application_role_uuid, application_role_id, application_id, role_id, created_by)
@@ -135,12 +132,7 @@ pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<
     )
     .execute(pool)
     .await
-    .unwrap();
-
-    println!(
-        "New application role created with UUID: {}",
-        unique_uuid_str
-    );
+    .context("Failed to insert new application role into the database")?;
 
     let application_role_id_result = query!(
         r#"
@@ -156,26 +148,23 @@ pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<
         Ok(record) => {
             let application_role_id = record.application_role_id;
             println!("New application role ID: {}", application_role_id);
-            Ok::<HttpResponse, Error>(HttpResponse::Ok().finish());
+            let _ = Ok::<HttpResponse, anyhow::Error>(HttpResponse::Ok().finish());
         }
         Err(sqlx::Error::RowNotFound) => {
             println!("No application role found for the given application_id and role_id");
-            Ok::<HttpResponse, Error>(HttpResponse::NotFound().finish());
+            let _ = Ok::<HttpResponse, anyhow::Error>(HttpResponse::NotFound().finish());
         }
         Err(e) => {
-            println!("Database query error: {:?}", e);
-            Ok::<HttpResponse, Error>(HttpResponse::InternalServerError().finish());
+            anyhow::bail!("Database query error: {:?}", e);
         }
     }
 
     let birthday_str = user.personal_birthday.format("%Y-%m-%d").to_string();
     let birthday_date = NaiveDate::parse_from_str(&birthday_str, "%Y-%m-%d")
-        .map_err(|e| {
-            eprintln!("Date parsing error: {:?}", e);
-            actix_web::error::ErrorInternalServerError("Failed to parse date")
-        })?;
+        .context("Failed to parse date")?;
 
-    let personal_number = phonenumber::parse(Some(ID), user.personal_phone.clone()).unwrap();
+    let personal_number = phonenumber::parse(Some(ID), user.personal_phone.clone())
+        .context("Failed to parse phone number")?;
     let personal_id = current_timestamp_micros + i128::from(unique_uuid.as_bytes()[2]);
 
     sqlx::query!(
@@ -195,7 +184,7 @@ pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<
     )
     .execute(pool)
     .await
-    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?;
+    .context("Failed to insert personal data into database")?;
 
     query!(
         r#"
@@ -210,12 +199,12 @@ pub async fn add_user(pool: &PgPool, user: Register, user_uuid: &str) -> Result<
     )
     .execute(pool)
     .await
-    .map_err(|err| actix_web::error::ErrorInternalServerError(err))?;
+    .context("Failed to insert user application role into database")?;
 
     Ok(HttpResponse::Ok().finish())
 }
 
-async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
+pub async fn get_username_by_id(db_pool: &PgPool, user_uuid: &str) -> Result<String, actix_web::Error> {
     match sqlx::query!(
         "SELECT user_name FROM user_ms WHERE user_uuid = $1",
         user_uuid

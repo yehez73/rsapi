@@ -54,12 +54,9 @@ pub struct ApplicationRole {
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Register {
-    // pub user_id: u32,
-    // pub user_uuid: Uuid,
     pub user_name: String,
     pub user_password: String,
     pub user_email: String,
-    // pub personal_uuid: Uuid,
     pub personal_name: String,
     pub personal_birthday: NaiveDate,
     pub personal_gender: Option<Gender>,
@@ -71,5 +68,6 @@ pub struct Register {
     pub updated_at: Option<NaiveDateTime>,
     pub deleted_by: Option<String>,
     pub deleted_at: Option<NaiveDateTime>,
-    pub application_role: ApplicationRole,
+    #[allow(non_snake_case)]
+    pub applicationRole: ApplicationRole,
 }
