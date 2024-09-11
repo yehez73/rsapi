@@ -1,5 +1,6 @@
 # Backend API
 
+[WIP]
 This project is an API built using Rust programming language.
 
 ## Installation
